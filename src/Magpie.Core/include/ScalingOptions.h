@@ -201,6 +201,9 @@ struct ScalingOptions {
 	std::vector<EffectOption> effects;
 	ScalingFlags flags = ScalingFlags::AdjustCursorSpeed;
 	Cropping cropping{};
+	// 自適應：前端已算出精確來源矩形（螢幕座標）時直接採用，
+	// 略過 SrcTracker 對視窗種類的判斷，可精確排除標題欄與黑邊。
+	std::optional<RECT> srcRectOverride;
 	GraphicsCardId graphicsCardId;
 	float minFrameRate = 0.0f;
 	std::optional<float> maxFrameRate;
