@@ -108,6 +108,7 @@
       <SubType>Code</SubType>
     </ClInclude>
     <ClInclude Include="AdaptersService.h" />
+    <ClInclude Include="AdaptiveHelper.h" />
     <ClInclude Include="AppSettings.h" />
     <ClInclude Include="AutoStartHelper.h" />
     <ClInclude Include="BoolNegationConverter.h">
@@ -303,6 +304,7 @@
       <SubType>Code</SubType>
     </ClCompile>
     <ClCompile Include="AdaptersService.cpp" />
+    <ClCompile Include="AdaptiveHelper.cpp" />
     <ClCompile Include="AppSettings.cpp" />
     <ClCompile Include="AutoStartHelper.cpp" />
     <ClCompile Include="BoolNegationConverter.cpp">

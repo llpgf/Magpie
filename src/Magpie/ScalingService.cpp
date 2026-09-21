@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "ScalingService.h"
 #include "App.h"
+#include "AdaptiveHelper.h"
 #include "AppSettings.h"
 #include "EffectsService.h"
 #include "LocalizationService.h"
@@ -308,6 +309,19 @@ void ScalingService::_StartScale(HWND hWnd, const Profile& profile, bool windowe
 	}
 }
 
+// 自適應：依有效放大倍率挑選縮放模式（找不到合適的就維持使用者的選擇）
+static int PickAdaptiveScalingMode(float scale, int fallback) noexcept {
+	const std::vector<ScalingMode>& modes = AppSettings::Get().ScalingModes();
+	// 放大倍率小 -> 只做還原（Restore）；倍率足夠 -> 用 GAN x2 生成細節
+	const wchar_t* want = scale < 1.6f ? L"Restore" : L"GAN x2";
+	for (int i = 0; i < (int)modes.size(); ++i) {
+		if (modes[i].name.find(want) != std::wstring::npos) {
+			return i;
+		}
+	}
+	return fallback;
+}
+
 ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, bool windowedMode, bool force) {
 	// ScalingRuntime::Start 会检查是否正在缩放，这里提前检查以避免无效操作
 	if (!force && _scalingRuntime->State() == ScalingState::Scaling) {
@@ -322,8 +336,21 @@ ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, 
 		return ScalingError::InvalidScalingMode;
 	}
 
+	// 自適應：偵測遊戲原生解析度，算出精確來源矩形，並依放大倍率挑選縮放模式
+	int scalingModeIdx = profile.scalingMode;
+	AdaptiveResult adaptive{};
+	const bool isAdaptive = EvaluateAdaptive(hWnd, 0, 0, adaptive);
+	if (isAdaptive) {
+		const int picked = PickAdaptiveScalingMode(adaptive.scale, scalingModeIdx);
+		if (picked >= 0 && picked != scalingModeIdx) {
+			Logger::Get().Info(fmt::format("自適應：{:.2f}x 放大 -> 改用縮放模式 [{}]",
+				adaptive.scale, picked));
+			scalingModeIdx = picked;
+		}
+	}
+
 	const std::vector<EffectItem>& effects =
-		ScalingModesService::Get().GetScalingMode(profile.scalingMode).effects;
+		ScalingModesService::Get().GetScalingMode(scalingModeIdx).effects;
 	if (effects.empty()) {
 		return ScalingError::InvalidScalingMode;
 	} else {
@@ -402,6 +429,11 @@ ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, 
 
 	if (profile.isCroppingEnabled) {
 		options.cropping = profile.cropping;
+	}
+
+	// 自適應：直接指定精確的來源矩形（可精確排除標題欄與黑邊）
+	if (isAdaptive) {
+		options.srcRectOverride = adaptive.srcRect;
 	}
 
 	switch (profile.cursorScaling) {

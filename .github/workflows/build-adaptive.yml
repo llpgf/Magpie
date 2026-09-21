@@ -1,0 +1,41 @@
+name: build-adaptive
+
+# 只編 MSVC / x64，產出可直接測試的 Magpie.exe（比上游的 4 組 matrix 快很多）
+on:
+  push:
+    branches: [ adaptive ]
+    paths:
+      - '.github/workflows/build-adaptive.yml'
+      - 'Magpie.slnx'
+      - '*.props'
+      - 'scripts/publish.py'
+      - 'src/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Setup Conan
+        run: pip install conan
+
+      - name: Load Conan cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.conan2/p
+          key: Conan-adaptive-${{ hashFiles('src/**/conanfile.txt') }}
+
+      - name: Build
+        run: python scripts/publish.py --compiler=MSVC --platform=x64
+
+      - name: Store build
+        uses: actions/upload-artifact@v7
+        with:
+          name: Magpie-adaptive-x64
+          path: ./publish/x64
