@@ -549,7 +549,7 @@ ScalingError SrcTracker::_CalcSrcRect(
 	}
 
 	if (options.srcRectOverride) {
-		// 自適應：前端已算出精確的來源矩形（螢幕座標），直接採用，不再套用 cropping
+		// 自適應：前端已算出精確的來源矩形（螢幕座標）
 		_srcRect = *options.srcRectOverride;
 
 		HMONITOR hMon = MonitorFromWindow(_hWnd, MONITOR_DEFAULTTONEAREST);
@@ -561,14 +561,22 @@ ScalingError SrcTracker::_CalcSrcRect(
 		Logger::Get().Info(fmt::format("自適應來源矩形: {},{},{},{} ({}x{})",
 			_srcRect.left, _srcRect.top, _srcRect.right, _srcRect.bottom,
 			_srcRect.right - _srcRect.left, _srcRect.bottom - _srcRect.top));
-	} else {
-		_srcRect = {
-			std::lround(_srcRect.left + options.cropping.Left),
-			std::lround(_srcRect.top + options.cropping.Top),
-			std::lround(_srcRect.right - options.cropping.Right),
-			std::lround(_srcRect.bottom - options.cropping.Bottom)
-		};
 	}
+
+	// 使用者的自訂裁剪一律套用（以自適應算出的矩形為基準再微調）
+	if (options.cropping.Left != 0.0f || options.cropping.Top != 0.0f
+		|| options.cropping.Right != 0.0f || options.cropping.Bottom != 0.0f) {
+		Logger::Get().Info(fmt::format("套用自訂裁剪: 左{} 上{} 右{} 下{}",
+			options.cropping.Left, options.cropping.Top,
+			options.cropping.Right, options.cropping.Bottom));
+	}
+
+	_srcRect = {
+		std::lround(_srcRect.left + options.cropping.Left),
+		std::lround(_srcRect.top + options.cropping.Top),
+		std::lround(_srcRect.right - options.cropping.Right),
+		std::lround(_srcRect.bottom - options.cropping.Bottom)
+	};
 
 	if (_srcRect.right - _srcRect.left < MIN_SRC_SIZE || _srcRect.bottom - _srcRect.top < MIN_SRC_SIZE) {
 		Logger::Get().Error("裁剪窗口失败");
