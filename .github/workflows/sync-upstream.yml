@@ -1,0 +1,84 @@
+name: sync-upstream
+
+# 自動追蹤 Blinue/Magpie 官方更新
+#   job 1  mirror  : 把 fork 的 dev 強制同步成 upstream/dev（完全鏡像，不掺自己的修改）
+#   job 2  merge   : 把 dev 合併進功能分支 adaptive（衝突時不強推，改開 issue 通知）
+on:
+  schedule:
+    - cron: '0 3 * * *'        # 每天 UTC 03:00（台灣時間 11:00）
+  workflow_dispatch:           # 也可以手動觸發
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  mirror:
+    name: 鏡像 upstream/dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: 同步
+        run: |
+          set -e
+          git remote add upstream https://github.com/Blinue/Magpie.git
+          git fetch upstream dev
+          BEFORE=$(git rev-parse HEAD)
+          AFTER=$(git rev-parse FETCH_HEAD)
+          if [ "$BEFORE" = "$AFTER" ]; then
+            echo "已是最新：$AFTER"
+          else
+            echo "更新 $BEFORE -> $AFTER"
+            git push origin FETCH_HEAD:refs/heads/dev --force
+          fi
+          echo "sha=$AFTER" >> "$GITHUB_OUTPUT"
+        id: sync
+
+      - name: 摘要
+        run: |
+          echo "### upstream/dev 同步完成" >> $GITHUB_STEP_SUMMARY
+          echo "- 目前 HEAD：\`${{ steps.sync.outputs.sha }}\`" >> $GITHUB_STEP_SUMMARY
+
+  merge:
+    name: 合併到功能分支 adaptive
+    needs: mirror
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: adaptive
+          fetch-depth: 0
+
+      - name: 嘗試合併
+        id: merge
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin dev
+          if git merge --no-edit origin/dev; then
+            git push origin adaptive
+            echo "result=ok" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort || true
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 衝突時開 issue 通知
+        if: steps.merge.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="upstream 更新與 adaptive 分支衝突"
+          BODY=$(printf '自動合併 `upstream/dev` 到 `adaptive` 時發生衝突，需要手動處理。\n\n在本機執行：\n```\ngit fetch upstream\ngit checkout adaptive\ngit merge upstream/dev\n# 解決衝突後\ngit push\n```\n' )
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --search "$TITLE in:title" --state open --json number --jq '.[0].number')
+          if [ -z "$EXISTING" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
+          else
+            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "又發生一次衝突（$(date -u +%Y-%m-%d)）"
+          fi
+          exit 1

@@ -1,0 +1,41 @@
+name: runner-probe
+
+on:
+  workflow_dispatch:      # 只在手動觸發時跑，避免每次 push 都消耗 CI
+
+jobs:
+  vs2026:
+    runs-on: windows-2025-vs2026
+    continue-on-error: true
+    steps:
+      - name: 環境
+        shell: pwsh
+        run: |
+          Write-Host "runner : $env:ImageOS / $env:RUNNER_OS"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            & $vswhere -latest -products * -property installationVersion
+            & $vswhere -latest -products * -property installationPath
+          } else { Write-Host "no vswhere" }
+          Write-Host "--- MSVC toolsets ---"
+          Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio\*\*\VC\Tools\MSVC" -Directory -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Name
+          Write-Host "--- Windows SDK ---"
+          Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Include" -Directory -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Name
+
+  vs2022:
+    runs-on: windows-2025
+    continue-on-error: true
+    steps:
+      - name: 環境
+        shell: pwsh
+        run: |
+          Write-Host "runner : $env:ImageOS / $env:RUNNER_OS"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            & $vswhere -latest -products * -property installationVersion
+          } else { Write-Host "no vswhere" }
+          Write-Host "--- MSVC toolsets ---"
+          Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio\*\*\VC\Tools\MSVC" -Directory -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Name
