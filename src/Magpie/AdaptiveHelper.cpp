@@ -104,6 +104,50 @@ bool EvaluateAdaptive(
 		return false;
 	}
 
+	// ------------------------------------------------------------------
+	// 核心：把來源視窗外部調整成「原生解析度 1:1」
+	//
+	// 引擎的顯示倍率為 realScale = min(客戶區寬 / W, 客戶區高 / H)（MZ 的拉伸規則），
+	// 只要讓客戶區的「實體像素」等於 W x H，realScale 就會等於 1/dpr，
+	// 畫布剛好一個像素對一個螢幕像素。這是從外部用 SetWindowPos 完成的，
+	// 不需要修改遊戲的任何檔案或設定。
+	// ------------------------------------------------------------------
+	{
+		const LONG curW = clientRect.right - clientRect.left;
+		const LONG curH = clientRect.bottom - clientRect.top;
+		if (!pluginInstalled) {
+			const double k = std::min((double)curW / W, (double)curH / H);
+			const LONG canvasW = std::lround(W * k);
+			const LONG canvasH = std::lround(H * k);
+			if (canvasW != (LONG)W || canvasH != (LONG)H) {
+				if (IsZoomed(hWnd)) {
+					ShowWindow(hWnd, SW_RESTORE);
+				}
+
+				RECT wr{}, cr{};
+				if (GetWindowRect(hWnd, &wr) && GetClientRect(hWnd, &cr)) {
+					// 保留原本的視窗外框（標題欄與邊框）
+					const LONG frameW = (wr.right - wr.left) - cr.right;
+					const LONG frameH = (wr.bottom - wr.top) - cr.bottom;
+
+					Logger::Get().Info(fmt::format(
+						"自適應：把視窗由 {}x{} 調整為 {}x{} 實體像素，讓畫布回到 1:1",
+						curW, curH, W, H));
+
+					if (SetWindowPos(hWnd, nullptr, wr.left, wr.top,
+						(LONG)W + frameW, (LONG)H + frameH,
+						SWP_NOZORDER | SWP_NOACTIVATE)) {
+						// 等引擎收到 WM_SIZE、重新計算 realScale 並重繪
+						Sleep(150);
+						Win32Helper::GetClientScreenRect(hWnd, clientRect);
+					} else {
+						Logger::Get().Win32Error("自適應：SetWindowPos 失敗");
+					}
+				}
+			}
+		}
+	}
+
 	const LONG cw = clientRect.right - clientRect.left;
 	const LONG ch = clientRect.bottom - clientRect.top;
 	if (cw < 64 || ch < 64) {
